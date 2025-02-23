@@ -195,3 +195,70 @@ predictions.head()
 # Backtesting error
 # ==============================================================================
 metric
+
+# Hyperparameters search
+# ==============================================================================
+# Lags grid
+lags_grid = [48, 72, [1, 2, 3, 23, 24, 25, 167, 168, 169]]
+
+# Regressor hyperparameters search space
+def search_space(trial):
+    search_space  = {
+        'n_estimators'    : trial.suggest_int('n_estimators', 400, 1200, step=100),
+        'max_depth'       : trial.suggest_int('max_depth', 3, 10, step=1),
+        'min_data_in_leaf': trial.suggest_int('min_data_in_leaf', 25, 500),
+        'learning_rate'   : trial.suggest_float('learning_rate', 0.01, 0.5),
+        'feature_fraction': trial.suggest_float('feature_fraction', 0.5, 1, step=0.1),
+        'max_bin'         : trial.suggest_int('max_bin', 50, 250, step=25),
+        'reg_alpha'       : trial.suggest_float('reg_alpha', 0, 1, step=0.1),
+        'reg_lambda'      : trial.suggest_float('reg_lambda', 0, 1, step=0.1),
+        'lags'            : trial.suggest_categorical('lags', lags_grid)
+    } 
+    return search_space
+
+# Folds training and validation
+cv = TimeSeriesFold(
+        steps              = 36,
+        initial_train_size = len(data_train),
+        refit              = False,
+    )
+
+results_search, frozen_trial = bayesian_search_forecaster(
+    forecaster    = forecaster,
+    y             = data.loc[:end_validation, 'users'], # Test data not used
+    cv            = cv,
+    search_space  = search_space,
+    metric        = 'mean_absolute_error',
+    n_trials      = 20, # Increase this value for a more exhaustive search
+    random_state  = 123,
+    return_best   = True,
+    n_jobs        = 'auto',
+    verbose       = False,
+    show_progress = True
+)
+
+results_search.head(3)
+
+# Best model
+# ==============================================================================
+forecaster
+
+# Backtest final model on test data
+# ==============================================================================
+cv = TimeSeriesFold(
+        steps              = 36,
+        initial_train_size = len(data[:end_validation]),
+        refit              = False,
+     )
+metric, predictions = backtesting_forecaster(
+                          forecaster    = forecaster,
+                          y             = data['users'],
+                          cv            = cv,
+                          metric        = 'mean_absolute_error',
+                          n_jobs        = 'auto',
+                          verbose       = False,
+                          show_progress = True
+                      )
+display(metric)
+predictions.head()
+
