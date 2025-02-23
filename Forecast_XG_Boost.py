@@ -118,25 +118,41 @@ import plotly.io as pio
 pio.renderers.default = "browser"
 fig.show()
 
-# Static plot of time series with zoom
-# ==============================================================================
-zoom = ('2011-08-01 00:00:00', '2011-08-15 00:00:00')
-fig = plt.figure(figsize=(8, 4))
-grid = plt.GridSpec(nrows=8, ncols=1, hspace=0.1, wspace=0)
-main_ax = fig.add_subplot(grid[1:3, :])
+fig, ax = plt.subplots(figsize=(5, 2))
+plot_acf(data['users'], ax=ax, lags=72)
+plt.show()
 
-data_train['users'].plot(ax=main_ax, label='train', alpha=0.5)
-data_val['users'].plot(ax=main_ax, label='validation', alpha=0.5)
-data_test['users'].plot(ax=main_ax, label='test', alpha=0.5)
-min_y = min(data['users'])
-max_y = max(data['users'])
-main_ax.fill_between(zoom, min_y, max_y, facecolor='blue', alpha=0.5, zorder=0)
-main_ax.set_title(f'Number of users: {data.index.min()}, {data.index.max()}', fontsize=10)
-main_ax.set_xlabel('')
-main_ax.legend(loc='lower center', ncol=3, bbox_to_anchor=(0.5, -0.8))
-zoom_ax = fig.add_subplot(grid[5:, :])
-data.loc[zoom[0]: zoom[1]]['users'].plot(ax=zoom_ax, color='blue', linewidth=1)
-zoom_ax.set_title(f'Number of users: {zoom}', fontsize=10)
-zoom_ax.set_xlabel('')
-plt.subplots_adjust(hspace=1)
-plt.show();
+fig, ax = plt.subplots(figsize=(5, 2))
+plot_pacf(data['users'], ax=ax, lags=72, method='ywm')
+plt.show()
+
+# Create baseline: value of the same hour of the previous day
+# ==============================================================================
+forecaster = ForecasterEquivalentDate(
+                 offset    = pd.DateOffset(days=1),
+                 n_offsets = 1
+             )
+
+# Train forecaster
+# ==============================================================================
+forecaster.fit(y=data.loc[:end_validation, 'users'])
+forecaster
+
+# Backtesting
+# ==============================================================================
+cv = TimeSeriesFold(
+        steps              = 36,
+        initial_train_size = len(data.loc[:end_validation]),
+        refit              = False
+)
+metric_baseline, predictions = backtesting_forecaster(
+                                   forecaster    = forecaster,
+                                   y             = data['users'],
+                                   cv            = cv,
+                                   metric        = 'mean_absolute_error',
+                                   n_jobs        = 'auto',
+                                   verbose       = False,
+                                   show_progress = True
+                               )
+metric_baseline
+
