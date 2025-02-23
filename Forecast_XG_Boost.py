@@ -156,3 +156,42 @@ metric_baseline, predictions = backtesting_forecaster(
                                )
 metric_baseline
 
+# Create forecaster
+# ==============================================================================
+window_features = RollingFeatures(stats=["mean"], window_sizes=24 * 3)
+forecaster = ForecasterRecursive(
+                regressor       = LGBMRegressor(random_state=15926, verbose=-1),
+                lags            = 24,
+                window_features = window_features
+             )
+
+forecaster.fit(y=data.loc[:end_validation, 'users'])
+forecaster
+
+# Predict
+# ==============================================================================
+forecaster.predict(steps=10)
+
+# Backtest model on test data
+# ==============================================================================
+cv = TimeSeriesFold(
+        steps              = 36,
+        initial_train_size = len(data[:end_validation]),
+        refit              = False,
+)
+
+metric, predictions = backtesting_forecaster(
+                          forecaster    = forecaster,
+                          y             = data['users'],
+                          cv            = cv,
+                          metric        = 'mean_absolute_error',
+                          n_jobs        = 'auto',
+                          verbose       = False,  # Change to True to see more information
+                          show_progress = True
+                      )
+
+predictions.head()
+
+# Backtesting error
+# ==============================================================================
+metric
