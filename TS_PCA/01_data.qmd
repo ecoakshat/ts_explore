@@ -14,27 +14,30 @@ library(EIAapi)
 library(dplyr)
 library(plotly)
 library(httr)
+library(jsonlite)
 ```
 
 
 ```{r}
 api_key <- "kxRqbNCBkelX2ClgwTZsbhi6hY6E5Qn5rD4ef77J"
 api_path_gas <- "natural-gas/cons/sum/data/"
-(Sys.setenv(EIA_API_KEY = "kxRqbNCBkelX2ClgwTZsbhi6hY6E5Qn5rD4ef77J"))
+Sys.setenv(EIA_API_KEY = "kxRqbNCBkelX2ClgwTZsbhi6hY6E5Qn5rD4ef77J")
+api_key <- Sys.getenv("EIA_API_KEY")
 
-url <- paste0("https://api.eia.gov/v2/natural-gas/cons/sum/data/?frequency=monthly&data[0]=value&sort[0][column]=period&sort[0][direction]=desc&offset=0&length=5000", api_key)
+
+
+url <- paste0("https://api.eia.gov/v2/natural-gas/cons/sum/data/?api_key=", api_key,
+              "&frequency=monthly&data[0]=value&sort[0][column]=period&sort[0][direction]=desc&offset=0&length=5000")
 response <- GET(url)
-print(content(response, as = "text"))
+parsed_response <- fromJSON(content(response, as = "text", encoding = "UTF-8"))
+
+
 ```
 
 
 ```{r}
-meta_gas_raw <- eia_metadata(
-    api_path = "natural-gas/cons/sum/data/facet/parent",
-    api_key = api_key
-)
+meta_gas <- as.data.frame(parsed_response$response$data)
 
-meta_gas <- meta_gas_raw$data
 head(meta_gas)
 
 duoarea <- (meta_gas |> dplyr::select(duoarea) |> dplyr::distinct())$duoarea

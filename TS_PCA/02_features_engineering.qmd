@@ -1,6 +1,6 @@
 ---
 title: "Features Engineering"
-author: "Rami Krispin"
+author: "Akshat Agarwal"
 date: last-modified
 format: 
   html:
