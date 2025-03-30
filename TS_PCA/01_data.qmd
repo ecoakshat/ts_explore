@@ -1,0 +1,130 @@
+---
+title: "Data Prep"
+author: "Akshat Agarwal"
+date: last-modified
+format: 
+  html:
+    code-fold: true
+---
+
+
+
+```{r}
+library(EIAapi)
+library(dplyr)
+library(plotly)
+library(httr)
+```
+
+
+```{r}
+api_key <- "kxRqbNCBkelX2ClgwTZsbhi6hY6E5Qn5rD4ef77J"
+api_path_gas <- "natural-gas/cons/sum/data/"
+(Sys.setenv(EIA_API_KEY = "kxRqbNCBkelX2ClgwTZsbhi6hY6E5Qn5rD4ef77J"))
+
+url <- paste0("https://api.eia.gov/v2/natural-gas/cons/sum/data/?frequency=monthly&data[0]=value&sort[0][column]=period&sort[0][direction]=desc&offset=0&length=5000", api_key)
+response <- GET(url)
+print(content(response, as = "text"))
+```
+
+
+```{r}
+meta_gas_raw <- eia_metadata(
+    api_path = "natural-gas/cons/sum/data/facet/parent",
+    api_key = api_key
+)
+
+meta_gas <- meta_gas_raw$data
+head(meta_gas)
+
+duoarea <- (meta_gas |> dplyr::select(duoarea) |> dplyr::distinct())$duoarea
+
+```
+
+
+
+```{r}
+# Pull the data
+d <- lapply(duoarea, function(i) {
+    print(i)
+    df <- NULL
+    df <- eia_get(
+        api_key = api_key,
+        api_path = api_path_gas,
+        frequency = "monthly",
+        data = "value",
+        facets = list(duoarea = i)
+    )
+}) |>
+    dplyr::bind_rows() |>
+    dplyr::mutate(date = as.Date(paste(period, "-01", sep = ""))) |>
+    dplyr::select(area_name = `area-name`, process, process_name = `process-name`, series, date, description = `series-description`, value, units)
+
+
+```
+
+
+
+
+```{r}
+head(d)
+unique(d$area_name)
+unique(d$process)
+unique(d$process_name)
+```
+
+```{r}
+states_abb <- data.frame(name = state.name, name_lower = tolower(state.name), code = state.abb)
+
+d$area_name_lower <- tolower(d$area_name)
+
+d1 <- d |>
+    dplyr::left_join(states_abb |> dplyr::select(name_lower, code), by = c("area_name_lower" = "name_lower"))
+
+
+d1$area_code <- NA
+d1$area_code <- ifelse(nchar(d1$area_name) == 6, substr(d1$area_name, start = 5, stop = 6), d1$code)
+d1$area_code <- ifelse(d1$area_name == "U.S.", "US", d1$area_code)
+
+d2 <- d1 |>
+    dplyr::left_join(
+        states_abb |>
+            dplyr::select(name, code),
+        by = c("area_code" = "code")
+    ) |>
+    dplyr::select(area_name = name, area_code, process, process_name, date, value, units, description)
+
+d2$area_name <- ifelse(is.na(d2$area_name) & d2$area_code == "US", "USA", d2$area_name)
+d2$area_name <- ifelse(is.na(d2$area_name) & d2$area_code == "DC", "Washington, D.C.", d2$area_name)
+
+
+table(d2$area_code, useNA = "always")
+table(d2$area_name, useNA = "always")
+```
+
+
+
+
+```{r}
+d2 |>
+    dplyr::filter(process_name == "Vehicle Fuel Consumption") |>
+    dplyr::arrange(area_name, process_name, date) |>
+    plotly::plot_ly(
+        x = ~date, y = ~value,
+        color = ~area_name,
+        name = ~area_name,
+        type = "scatter",
+        mode = "line"
+    )
+
+```
+
+
+
+```{r}
+us_gas <- d2
+saveRDS(us_gas, file = "./data/us_gas.RDS")
+
+us_gas_csv <- us_gas |> dplyr::select(area_name, process, process_name, date, description, value)
+write.csv(us_gas_csv, "./data/us_gas.csv", row.names = FALSE)
+```
