@@ -259,6 +259,8 @@ metric, predictions = backtesting_forecaster(
                           verbose       = False,
                           show_progress = True
                       )
-display(metric)
+
+metric
+
 predictions.head()
 
